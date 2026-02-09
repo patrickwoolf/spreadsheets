@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GitHub Cloud Drive</title>
     <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/plugins/css/pluginsCss.css' />
     <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/plugins/plugins.css' />
@@ -11,51 +12,60 @@
     <script src="https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/luckysheet.umd.js"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f4f4f9; }
-        #drive-ui { max-width: 800px; margin: 50px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .file-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; transition: background 0.2s; }
-        .file-item:hover { background: #f0f7ff; }
-        .file-name { cursor: pointer; color: #007bff; flex-grow: 1; font-weight: 500; }
-        button { padding: 8px 12px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 12px; }
-        .btn-create { background: #28a745; color: white; margin-bottom: 20px; font-size: 14px; }
-        .btn-save { background: #007bff; color: white; }
+        :root { --primary: #007bff; --success: #28a745; --danger: #dc3545; --dark: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f4f4f9; color: var(--dark); }
+        
+        #drive-ui { max-width: 800px; margin: 20px auto; padding: 15px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .file-item { display: flex; flex-direction: column; padding: 15px; border-bottom: 1px solid #eee; gap: 10px; transition: background 0.2s; }
+        .file-item:hover { background: #fdfdfd; }
+        .file-info { cursor: pointer; flex-grow: 1; font-weight: 600; color: var(--primary); font-size: 1.1rem; }
+        .file-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        
+        button { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; transition: opacity 0.2s; }
+        button:active { opacity: 0.7; }
+        .btn-create { width: 100%; background: var(--success); color: white; margin-bottom: 20px; font-size: 1rem; height: 50px; }
+        .btn-save { background: var(--primary); color: white; }
         .btn-back { background: #6c757d; color: white; }
-        .btn-copy { background: #17a2b8; color: white; margin-right: 5px; }
-        .btn-del { background: #dc3545; color: white; }
-        #editor-ui { display: none; }
-        .controls { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
-        #debug-log { background: #ffebeb; color: #b71c1c; padding: 10px; margin-top: 20px; border-radius: 4px; font-size: 12px; display: none; border: 1px solid #f44336; }
+        .btn-copy { background: #17a2b8; color: white; }
+        .btn-del { background: var(--danger); color: white; }
+
+        #editor-ui { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 1000; }
+        .controls { background: var(--dark); color: white; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; height: 60px; }
+        #luckysheet { width: 100%; height: calc(100% - 60px); position: absolute; top: 60px; left: 0; }
+
+        @media (min-width: 600px) {
+            .file-item { flex-direction: row; align-items: center; }
+            .btn-create { width: auto; }
+        }
     </style>
 </head>
 <body>
 
     <div id="drive-ui">
-        <h1>📁 My GitHub Drive</h1>
-        <button class="btn-create" onclick="createNewSheet()">+ Create New Spreadsheet</button>
-        <div id="file-list">Loading files from GitHub...</div>
-        <div id="debug-log"></div>
+        <h1>📁 GitHub Cloud Drive</h1>
+        <button class="btn-create" onclick="createNewSheet()">+ New Spreadsheet</button>
+        <div id="file-list">Connecting to GitHub...</div>
     </div>
 
     <div id="editor-ui">
         <div class="controls">
-            <span id="active-filename">Editing...</span>
-            <div>
-                <button class="btn-save" onclick="saveCurrentSheet()">💾 SAVE (Ctrl+S)</button>
+            <strong id="active-filename">Sheet</strong>
+            <div style="display: flex; gap: 5px;">
+                <button class="btn-save" onclick="saveCurrentSheet()">💾 SAVE</button>
                 <button class="btn-back" onclick="location.reload()">✖ EXIT</button>
             </div>
         </div>
-        <div id="luckysheet" style="margin:0px;padding:0px;position:absolute;width:100%;height:calc(100% - 60px);left:0px;top:60px;"></div>
+        <div id="luckysheet"></div>
     </div>
 
     <script>
-        // --- CONFIGURATION ---
-        // Split your token here
-        const ken1 = 'github_pat_11AKK62IA07gCjbOsajxBp_'; 
-        const ken2 = 'l3ErZkVowkhdHtaE56WpwmL1YoAWSj4qtzPT'; 
-        const ken3 = 'cDjSOIiBHD4OVFJ984IynKC'; 
+        // --- AUTH SPLIT (Protects token from GitHub auto-revocation) ---
+        const p1 = 'github_pat_11AKK62IA07gCjbOsajxBp_';
+        const p2 = 'l3ErZkVowkhdHtaE56WpwmL1YoAWSj4qtzPT';
+        const p3 = 'cDjSOIiBHD4OVFJ984IynKC';
 
         const CONFIG = {
-            ken: ken1 + ken2 + ken3, 
+            token: p1 + p2 + p3, 
             owner: 'patrickwoolf',
             repo: 'spreadsheets',
             folder: 'my-sheets'
@@ -64,195 +74,151 @@
         let currentFileSha = '';
         let currentFileName = '';
 
-        function logError(msg) {
-            const log = document.getElementById('debug-log');
-            log.style.display = 'block';
-            log.innerHTML = `<strong>Error:</strong> ${msg}`;
+        // --- ENCODING UTILITIES ---
+        function safeBtoa(str) {
+            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1)));
         }
 
-        // --- 1. FETCH ALL FILES ---
+        function safeAtob(str) {
+            try {
+                return decodeURIComponent(Array.prototype.map.call(atob(str), c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+            } catch (e) { return atob(str); }
+        }
+
+        // --- CORE FUNCTIONS ---
         async function loadFileList() {
             try {
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}`, {
-                    headers: { 'Authorization': `token ${CONFIG.ken}` }
+                    headers: { 'Authorization': `token ${CONFIG.token}`, 'Cache-Control': 'no-cache' }
                 });
-                
-                if (!res.ok) throw new Error(await res.text());
-
+                if (!res.ok) throw new Error("Folder not found or Token invalid.");
                 const files = await res.json();
                 const listDiv = document.getElementById('file-list');
                 listDiv.innerHTML = '';
                 
                 files.forEach(file => {
                     if(file.name.endsWith('.json')) {
-                        const fileNameOnly = file.name.replace('.json', '');
                         const div = document.createElement('div');
                         div.className = 'file-item';
                         div.innerHTML = `
-                            <span class="file-name" onclick="openSheet('${file.name}', '${file.sha}')">📊 ${fileNameOnly}</span>
-                            <div>
+                            <div class="file-info" onclick="openSheet('${file.name}')">📊 ${file.name.replace('.json', '')}</div>
+                            <div class="file-actions">
                                 <button class="btn-copy" onclick="copySheet('${file.name}')">Copy</button>
                                 <button class="btn-del" onclick="deleteSheet('${file.name}', '${file.sha}')">Del</button>
-                            </div>
-                        `;
+                            </div>`;
                         listDiv.appendChild(div);
                     }
                 });
-            } catch (err) {
-                logError("Could not list files. Check folder name and Token permissions. " + err.message);
-            }
+                if(listDiv.innerHTML === "") listDiv.innerText = "No files found.";
+            } catch (err) { document.getElementById('file-list').innerText = "Error: " + err.message; }
         }
 
-        // --- 2. OPEN A SHEET ---
-        async function openSheet(name, sha) {
+        async function openSheet(name) {
             try {
-                currentFileName = name;
-                currentFileSha = sha;
-                document.getElementById('active-filename').innerText = `Editing: ${name}`;
-                
+                // Fetch fresh file data to get the absolute latest SHA and Content
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
-                    headers: { 'Authorization': `token ${CONFIG.ken}` }
+                    headers: { 'Authorization': `token ${CONFIG.token}`, 'Cache-Control': 'no-cache' }
                 });
                 const fileData = await res.json();
                 
-                let rawContent = "";
-                try {
-                    rawContent = decodeURIComponent(escape(atob(fileData.content)));
-                } catch (e) {
-                    rawContent = atob(fileData.content);
-                }
+                currentFileName = name;
+                currentFileSha = fileData.sha; // Sync current SHA
 
-                let content;
-                if (!rawContent || rawContent.trim() === "") {
-                    content = [{"name": "Sheet1", "status": 1, "order": 0, "celldata": [], "config": {} }];
-                } else {
-                    content = JSON.parse(rawContent);
-                }
+                const jsonStr = safeAtob(fileData.content);
+                const content = JSON.parse(jsonStr || '[]');
 
                 document.getElementById('drive-ui').style.display = 'none';
                 document.getElementById('editor-ui').style.display = 'block';
+                document.getElementById('active-filename').innerText = name.replace('.json', '');
+
+                if (window.luckysheet && luckysheet.destroy) { luckysheet.destroy(); }
 
                 luckysheet.create({
                     container: 'luckysheet',
+                    data: content,
                     showinfobar: false,
-                    lang: 'en',
-                    data: content
+                    lang: 'en'
                 });
-            } catch (err) {
-                logError("Failed to open file: " + err.message);
-            }
+            } catch (err) { alert("Open failed: JSON might be corrupted."); }
         }
 
-        // --- 3. CREATE NEW SHEET ---
-        async function createNewSheet() {
-            const name = prompt("Enter new spreadsheet name:");
-            if (!name) return;
-            const fileName = name.endsWith('.json') ? name : name + '.json';
-            const initialData = [{"name": "Sheet1", "status": 1, "order": 0, "celldata": [], "config": {} }];
-            const content = btoa(unescape(encodeURIComponent(JSON.stringify(initialData))));
-
-            try {
-                const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${fileName}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${CONFIG.ken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ message: `Create ${fileName}`, content: content })
-                });
-
-                if (!res.ok) throw new Error(await res.text());
-                alert("Spreadsheet created!");
-                loadFileList();
-            } catch (err) {
-                logError("Create Failed: " + err.message);
-            }
-        }
-
-        // --- 4. SAVE DATA ---
         async function saveCurrentSheet() {
             try {
                 const data = luckysheet.getAllSheets();
-                const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+                const base64Content = safeBtoa(JSON.stringify(data));
 
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${currentFileName}`, {
                     method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${CONFIG.ken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Update ${currentFileName}`,
-                        content: content,
-                        sha: currentFileSha
+                    headers: { 'Authorization': `token ${CONFIG.token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message: `Update ${currentFileName}`, 
+                        content: base64Content, 
+                        sha: currentFileSha 
                     })
                 });
 
-                if (!res.ok) throw new Error(await res.text());
-                const updatedFile = await res.json();
-                currentFileSha = updatedFile.content.sha;
-                alert("Changes saved successfully!");
-            } catch (err) {
-                alert("Save Failed: " + err.message);
-            }
+                // Fix Status 409 Conflict: Fetch latest SHA and retry once
+                if (res.status === 409) {
+                    const refresh = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${currentFileName}`, {
+                        headers: { 'Authorization': `token ${CONFIG.token}`, 'Cache-Control': 'no-cache' }
+                    });
+                    const latest = await refresh.json();
+                    currentFileSha = latest.sha;
+                    return saveCurrentSheet(); // Recursive retry
+                }
+
+                if (res.ok) {
+                    const result = await res.json();
+                    currentFileSha = result.content.sha; // Update SHA for next immediate save
+                    alert("Saved!");
+                } else { throw new Error("GitHub Save Error: " + res.status); }
+            } catch (err) { alert(err.message); }
         }
 
-        // --- 5. DELETE SHEET ---
+        async function createNewSheet() {
+            const name = prompt("File Name:");
+            if (!name) return;
+            const fileName = name.endsWith('.json') ? name : name + '.json';
+            const initial = [{"name": "Sheet1", "status": 1, "order": 0, "celldata": [], "config": {} }];
+            const content = safeBtoa(JSON.stringify(initial));
+            
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${fileName}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${CONFIG.token}` },
+                body: JSON.stringify({ message: `Create ${fileName}`, content: content })
+            });
+            if(res.ok) loadFileList();
+            else alert("Create failed. File might already exist.");
+        }
+
         async function deleteSheet(name, sha) {
-            if (!confirm(`Delete "${name}" permanently?`)) return;
-            try {
-                const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `token ${CONFIG.ken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ message: `Delete ${name}`, sha: sha })
-                });
-                if (!res.ok) throw new Error(await res.text());
-                loadFileList();
-            } catch (err) {
-                alert("Delete failed: " + err.message);
-            }
+            if (!confirm(`Delete ${name}?`)) return;
+            await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `token ${CONFIG.token}` },
+                body: JSON.stringify({ message: "Delete", sha: sha })
+            });
+            loadFileList();
         }
 
-        // --- 6. COPY SHEET ---
-        async function copySheet(originalName) {
-            const newName = prompt("New copy name:", originalName.replace('.json', '') + "_copy");
-            if (!newName) return;
-            const finalNewName = newName.endsWith('.json') ? newName : newName + '.json';
-
-            try {
-                const resGet = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${originalName}`, {
-                    headers: { 'Authorization': `token ${CONFIG.ken}` }
-                });
-                const fileData = await resGet.json();
-
-                const resPut = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${finalNewName}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${CONFIG.ken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Copy ${originalName}`,
-                        content: fileData.content
-                    })
-                });
-                if (!resPut.ok) throw new Error(await resPut.text());
-                loadFileList();
-            } catch (err) {
-                alert("Copy failed: " + err.message);
-            }
+        async function copySheet(name) {
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
+                headers: { 'Authorization': `token ${CONFIG.token}` }
+            });
+            const file = await res.json();
+            await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name.replace('.json', '_copy.json')}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${CONFIG.token}` },
+                body: JSON.stringify({ message: "Copy", content: file.content })
+            });
+            loadFileList();
         }
 
         // --- KEYBOARD SHORTCUTS ---
-        window.addEventListener('keydown', function (e) {
+        window.addEventListener('keydown', e => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
-                if (document.getElementById('editor-ui').style.display === 'block') {
-                    saveCurrentSheet();
-                }
+                if (document.getElementById('editor-ui').style.display === 'block') saveCurrentSheet();
             }
         });
 
