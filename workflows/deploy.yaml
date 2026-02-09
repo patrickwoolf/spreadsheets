@@ -11,7 +11,7 @@ jobs:
       - name: Inject Token into HTML
         run: |
           # This replaces the placeholder in your index.html with your actual secret
-          sed -i "s/__GH_TOKEN__/${{ secrets.spreadsheets }}/g" index.html
+          sed -i "s/__GH_TOKEN__/${{ secrets.SPREADSHEETS }}/g" index.html
           
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
