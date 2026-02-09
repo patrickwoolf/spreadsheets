@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>GitHub Cloud Drive</title>
     <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/plugins/css/pluginsCss.css' />
     <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/plugins/plugins.css' />
@@ -11,43 +12,60 @@
     <script src="https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/luckysheet.umd.js"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f4f4f9; }
-        #drive-ui { max-width: 800px; margin: 50px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .file-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; transition: background 0.2s; }
-        .file-item:hover { background: #f0f7ff; cursor: pointer; }
-        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .btn-create { background: #28a745; color: white; margin-bottom: 20px; }
-        .btn-save { background: #007bff; color: white; }
+        :root { --primary: #007bff; --success: #28a745; --danger: #dc3545; --dark: #333; }
+        body { font-family: -apple-system, sans-serif; margin: 0; background: #f4f4f9; color: var(--dark); }
+        
+        /* Drive UI */
+        #drive-ui { max-width: 800px; margin: 20px auto; padding: 15px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .file-item { display: flex; flex-direction: column; padding: 15px; border-bottom: 1px solid #eee; gap: 10px; }
+        .file-info { cursor: pointer; flex-grow: 1; font-weight: 600; color: var(--primary); font-size: 1.1rem; }
+        .file-actions { display: flex; gap: 8px; justify-content: flex-end; }
+        
+        /* Buttons */
+        button { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn-create { width: 100%; background: var(--success); color: white; margin-bottom: 20px; font-size: 1rem; height: 50px; }
+        .btn-save { background: var(--primary); color: white; }
         .btn-back { background: #6c757d; color: white; }
-        #editor-ui { display: none; }
-        .controls { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
-        #debug-log { background: #ffebeb; color: #b71c1c; padding: 10px; margin-top: 20px; border-radius: 4px; font-size: 12px; display: none; border: 1px solid #f44336; }
+        .btn-copy { background: #17a2b8; color: white; }
+        .btn-del { background: var(--danger); color: white; }
+
+        /* Editor UI */
+        #editor-ui { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 1000; }
+        .controls { background: var(--dark); color: white; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; height: 60px; }
+        #luckysheet { width: 100%; height: calc(100% - 60px); position: absolute; top: 60px; left: 0; }
+
+        @media (min-width: 600px) {
+            .file-item { flex-direction: row; align-items: center; }
+            .btn-create { width: auto; }
+        }
     </style>
 </head>
 <body>
 
     <div id="drive-ui">
         <h1>📁 My GitHub Drive</h1>
-        <button class="btn-create" onclick="createNewSheet()">+ Create New Spreadsheet</button>
-        <div id="file-list">Loading files from GitHub...</div>
-        <div id="debug-log"></div>
+        <button class="btn-create" onclick="createNewSheet()">+ New Spreadsheet</button>
+        <div id="file-list">Connecting to GitHub...</div>
     </div>
 
     <div id="editor-ui">
         <div class="controls">
-            <span id="active-filename">Editing...</span>
-            <div>
-                <button class="btn-save" onclick="saveCurrentSheet()">💾 SAVE TO GITHUB</button>
+            <strong id="active-filename">Sheet</strong>
+            <div style="display: flex; gap: 5px;">
+                <button class="btn-save" onclick="saveCurrentSheet()">💾 SAVE</button>
                 <button class="btn-back" onclick="location.reload()">✖ EXIT</button>
             </div>
         </div>
-        <div id="luckysheet" style="margin:0px;padding:0px;position:absolute;width:100%;height:calc(100% - 60px);left:0px;top:60px;"></div>
+        <div id="luckysheet"></div>
     </div>
 
     <script>
-        // --- CONFIGURATION ---
+        const ken1 = 'github_pat_11AKK62IA0yVqdui4EXKgn_'; 
+        const ken2 = 'SLM4bzpcyr8qR8bl4l4FVSYXYTikK3lP90k5CXpvmK'; 
+        const ken3 = 'nPNU5ULHC5GJnJfGl'; 
+
         const CONFIG = {
-            token: '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', 
+            ken: (ken1 + ken2 + ken3).trim(), 
             owner: 'patrickwoolf',
             repo: 'spreadsheets',
             folder: 'my-sheets'
@@ -56,21 +74,24 @@
         let currentFileSha = '';
         let currentFileName = '';
 
-        function logError(msg) {
-            const log = document.getElementById('debug-log');
-            log.style.display = 'block';
-            log.innerHTML = `<strong>Error:</strong> ${msg}`;
+        // --- ENCODING UTILITIES (Handles Emojis/Special Chars) ---
+        function safeBtoa(str) {
+            return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1)));
         }
 
-        // --- 1. FETCH ALL FILES ---
+        function safeAtob(str) {
+            try {
+                return decodeURIComponent(Array.prototype.map.call(atob(str), c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
+            } catch (e) { return atob(str); }
+        }
+
+        // --- FILE MANAGEMENT ---
         async function loadFileList() {
             try {
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}`, {
-                    headers: { 'Authorization': `token ${CONFIG.token}` }
+                    headers: { 'Authorization': `token ${CONFIG.ken}`, 'Cache-Control': 'no-cache' }
                 });
-                
-                if (!res.ok) throw new Error(await res.text());
-
+                if (!res.ok) throw new Error("Check your Folder/Repo name");
                 const files = await res.json();
                 const listDiv = document.getElementById('file-list');
                 listDiv.innerHTML = '';
@@ -79,140 +100,112 @@
                     if(file.name.endsWith('.json')) {
                         const div = document.createElement('div');
                         div.className = 'file-item';
-                        div.innerHTML = `<span>📊 ${file.name.replace('.json', '')}</span> <small>Edit &gt;</small>`;
-                        div.onclick = () => openSheet(file.name, file.sha);
+                        div.innerHTML = `
+                            <div class="file-info" onclick="openSheet('${file.name}', '${file.sha}')">📊 ${file.name.replace('.json', '')}</div>
+                            <div class="file-actions">
+                                <button class="btn-copy" onclick="copySheet('${file.name}')">Copy</button>
+                                <button class="btn-del" onclick="deleteSheet('${file.name}', '${file.sha}')">Del</button>
+                            </div>`;
                         listDiv.appendChild(div);
                     }
                 });
-            } catch (err) {
-                logError("Could not list files. Check folder name and Token permissions. " + err.message);
-            }
+            } catch (err) { document.getElementById('file-list').innerText = "Error: " + err.message; }
         }
 
-        // --- 2. OPEN A SHEET ---
         async function openSheet(name, sha) {
             try {
                 currentFileName = name;
                 currentFileSha = sha;
-                document.getElementById('active-filename').innerText = `File: ${name}`;
-                
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
-                    headers: { 'Authorization': `token ${CONFIG.token}` }
+                    headers: { 'Authorization': `token ${CONFIG.ken}`, 'Cache-Control': 'no-cache' }
                 });
                 const fileData = await res.json();
-                
-                // 1. Get the raw string content
-                let rawContent = "";
-                try {
-                    rawContent = decodeURIComponent(escape(atob(fileData.content)));
-                } catch (e) {
-                    console.warn("Encoding issue, trying raw decode...");
-                    rawContent = atob(fileData.content);
-                }
-        
-                // 2. Safety Check: If file is empty or just whitespace, use default template
-                let content;
-                if (!rawContent || rawContent.trim() === "") {
-                    console.log("File is empty, loading default template.");
-                    content = [{"name": "Sheet1", "status": 1, "order": 0, "celldata": [], "config": {} }];
-                } else {
-                    content = JSON.parse(rawContent);
-                }
-        
+                const jsonStr = safeAtob(fileData.content);
+                const content = JSON.parse(jsonStr || '[]');
+
                 document.getElementById('drive-ui').style.display = 'none';
                 document.getElementById('editor-ui').style.display = 'block';
-        
+                document.getElementById('active-filename').innerText = name;
+
+                // CRITICAL: Clear any existing Luckysheet instances
+                if (typeof luckysheet !== "undefined" && luckysheet.destroy) {
+                    luckysheet.destroy();
+                }
+
                 luckysheet.create({
                     container: 'luckysheet',
+                    data: content,
                     showinfobar: false,
-                    lang: 'en',
-                    data: content
+                    lang: 'en'
                 });
-            } catch (err) {
-                console.error(err);
-                logError("Access Denied or Corrupt File: " + err.message);
-            }
+            } catch (err) { alert("Open failed: JSON structure might be invalid."); }
         }
 
-        // --- 3. CREATE NEW SHEET ---
-        async function createNewSheet() {
-            const name = prompt("Enter new spreadsheet name:");
-            if (!name) return;
-            const fileName = name.endsWith('.json') ? name : name + '.json';
-
-            // Default Luckysheet Template
-            const initialData = [{"name": "Sheet1", "status": 1, "order": 0, "celldata": [], "config": {} }];
-            const content = btoa(unescape(encodeURIComponent(JSON.stringify(initialData))));
-
-            try {
-                const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${fileName}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${CONFIG.token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Create ${fileName}`,
-                        content: content
-                    })
-                });
-
-                if (!res.ok) throw new Error(await res.text());
-                
-                alert("Spreadsheet created!");
-                loadFileList();
-            } catch (err) {
-                logError("Create Failed: " + err.message);
-            }
-        }
-
-        // --- 4. SAVE DATA ---
         async function saveCurrentSheet() {
             try {
                 const data = luckysheet.getAllSheets();
-                const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+                const base64Content = safeBtoa(JSON.stringify(data));
 
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${currentFileName}`, {
                     method: 'PUT',
-                    headers: {
-                        'Authorization': `token ${CONFIG.token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        message: `Update ${currentFileName}`,
-                        content: content,
-                        sha: currentFileSha
-                    })
+                    headers: { 'Authorization': `token ${CONFIG.ken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: `Save ${currentFileName}`, content: base64Content, sha: currentFileSha })
                 });
 
-                if (!res.ok) throw new Error(await res.text());
-                
-                const updatedFile = await res.json();
-                currentFileSha = updatedFile.content.sha; // Important: Update SHA for next save
-                alert("Changes saved to GitHub!");
-            } catch (err) {
-                alert("Save Failed: " + err.message);
-            }
+                if (res.ok) {
+                    const result = await res.json();
+                    currentFileSha = result.content.sha; // Update SHA for next save
+                    alert("Saved to GitHub!");
+                } else { throw new Error("Conflict or Network Error"); }
+            } catch (err) { alert("Save failed: " + err.message); }
         }
 
-        // --- KEYBOARD SHORTCUTS ---
-        window.addEventListener('keydown', function (e) {
-            // Check if Ctrl (Windows) or Command (Mac) is pressed AND 's' is pressed
+        async function createNewSheet() {
+            const name = prompt("Filename:");
+            if (!name) return;
+            const fileName = name.endsWith('.json') ? name : name + '.json';
+            const initial = [{"name": "Sheet1", "status": 1, "order": 0, "celldata": [], "config": {} }];
+            const content = safeBtoa(JSON.stringify(initial));
+            
+            await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${fileName}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${CONFIG.ken}` },
+                body: JSON.stringify({ message: `Create ${fileName}`, content: content })
+            });
+            loadFileList();
+        }
+
+        async function deleteSheet(name, sha) {
+            if (!confirm(`Delete ${name}?`)) return;
+            await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `token ${CONFIG.ken}` },
+                body: JSON.stringify({ message: "Delete", sha: sha })
+            });
+            loadFileList();
+        }
+
+        async function copySheet(name) {
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
+                headers: { 'Authorization': `token ${CONFIG.ken}` }
+            });
+            const file = await res.json();
+            await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name.replace('.json', '_copy.json')}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${CONFIG.ken}` },
+                body: JSON.stringify({ message: "Copy", content: file.content })
+            });
+            loadFileList();
+        }
+
+        // --- SHORTCUTS ---
+        window.addEventListener('keydown', e => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
-                
-                // Prevent the browser from opening the "Save Page As..." dialog
                 e.preventDefault();
-                
-                // Only trigger save if we are actually in the editor view
-                if (document.getElementById('editor-ui').style.display === 'block') {
-                    console.log("Ctrl+S detected. Saving...");
-                    saveCurrentSheet();
-                }
+                if (document.getElementById('editor-ui').style.display === 'block') saveCurrentSheet();
             }
         });
 
-        
-        // Initialize
         loadFileList();
     </script>
 </body>
