@@ -46,24 +46,25 @@
 
         // --- 1. LIST FILES ---
         async function loadFileList() {
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}`, {
-                headers: { 'Authorization': `token ${CONFIG.token}` }
-            });
-            const files = await res.json();
-            const listDiv = document.getElementById('file-list');
-            listDiv.innerHTML = '';
-            
-            files.forEach(file => {
-                if(file.name.endsWith('.json')) {
-                    const div = document.createElement('div');
-                    div.className = 'file-item';
-                    div.innerText = file.name.replace('.json', '');
-                    div.onclick = () => openSheet(file.name, file.sha);
-                    listDiv.appendChild(div);
+            try {
+                const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}`, {
+                    headers: { 'Authorization': `token ${CONFIG.token}` }
+                });
+                
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    console.error("GitHub API Error:", errorData.message);
+                    alert("GitHub says: " + errorData.message); // This will pop up the actual error
+                    return;
                 }
-            });
+        
+                const files = await res.json();
+                console.log("Files found:", files);
+                // ... rest of your code
+            } catch (err) {
+                console.error("Network or Script Error:", err);
+            }
         }
-
         // --- 2. OPEN SHEET ---
         async function openSheet(name, sha) {
             currentFileName = name;
