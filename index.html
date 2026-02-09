@@ -113,9 +113,36 @@
         }
 
         // --- 4. CREATE NEW ---
-        function createNewSheet() {
-            const name = prompt("Enter sheet name:") + ".json";
-            if(name) openSheet(name, ''); 
+        async function createNewSheet() {
+            const name = prompt("Enter sheet name (e.g., Budget):");
+            if (!name) return;
+            
+            const fileName = name.endsWith('.json') ? name : name + '.json';
+            
+            // 1. Initial empty Luckysheet data
+            const initialData = [{"name": "Sheet1", "color": "", "status": 1, "order": 0, "data": [], "config": {}, "index": 0}];
+            const content = btoa(JSON.stringify(initialData));
+        
+            // 2. Push to GitHub to actually "create" the file
+            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${fileName}`, {
+                method: 'PUT',
+                headers: {
+                    'Authorization': `token ${CONFIG.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    message: `Created new spreadsheet: ${fileName}`,
+                    content: content
+                })
+            });
+        
+            if (res.ok) {
+                alert("File created! Refreshing list...");
+                loadFileList(); // Refresh the list so you can see it
+            } else {
+                const err = await res.json();
+                alert("Error creating file: " + err.message);
+            }
         }
 
         loadFileList();
