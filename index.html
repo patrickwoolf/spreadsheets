@@ -97,7 +97,7 @@
                 document.getElementById('active-filename').innerText = `File: ${name}`;
                 
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
-                    headers: { 'Authorization': `token ${CONFIG.ken}` }
+                    headers: { 'Authorization': `token ${CONFIG.token}` }
                 });
                 const fileData = await res.json();
                 
