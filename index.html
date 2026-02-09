@@ -178,6 +178,23 @@
             }
         }
 
+        // --- KEYBOARD SHORTCUTS ---
+        window.addEventListener('keydown', function (e) {
+            // Check if Ctrl (Windows) or Command (Mac) is pressed AND 's' is pressed
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                
+                // Prevent the browser from opening the "Save Page As..." dialog
+                e.preventDefault();
+                
+                // Only trigger save if we are actually in the editor view
+                if (document.getElementById('editor-ui').style.display === 'block') {
+                    console.log("Ctrl+S detected. Saving...");
+                    saveCurrentSheet();
+                }
+            }
+        });
+
+        
         // Initialize
         loadFileList();
     </script>
