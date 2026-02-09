@@ -58,17 +58,18 @@
 
     <script>
         // --- AUTH SETUP ---
-        // Split to help prevent simple automated revocation
-        const a = 'github_pat_11AKK62IA0f7l4X9c8LCS6_';
-        const b = 'WunjZ1q5B8yJxbxFDIx3Lhkoj3o604HnRSxfp3NaahgOMFBWFFZwQRNXVaM';
-
+        // This placeholder will be replaced by GitHub Actions during deployment
+        const INJECTED_TOKEN = "__GH_TOKEN__"; 
+    
         const CONFIG = {
-            token: a + b, 
+            // Use injected token, or fallback to localStorage if you manually set it
+            token: INJECTED_TOKEN.startsWith("__") ? localStorage.getItem('gh_drive_token') : INJECTED_TOKEN,
             owner: 'patrickwoolf',
             repo: 'spreadsheets',
             folder: 'my-sheets'
         };
-
+    
+    
         let currentFileSha = '';
         let currentFileName = '';
 
