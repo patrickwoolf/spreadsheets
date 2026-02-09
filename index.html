@@ -15,13 +15,11 @@
         :root { --primary: #007bff; --success: #28a745; --danger: #dc3545; --dark: #333; }
         body { font-family: -apple-system, sans-serif; margin: 0; background: #f4f4f9; color: var(--dark); }
         
-        /* Drive UI */
         #drive-ui { max-width: 800px; margin: 20px auto; padding: 15px; background: white; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         .file-item { display: flex; flex-direction: column; padding: 15px; border-bottom: 1px solid #eee; gap: 10px; }
         .file-info { cursor: pointer; flex-grow: 1; font-weight: 600; color: var(--primary); font-size: 1.1rem; }
         .file-actions { display: flex; gap: 8px; justify-content: flex-end; }
         
-        /* Buttons */
         button { padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 14px; }
         .btn-create { width: 100%; background: var(--success); color: white; margin-bottom: 20px; font-size: 1rem; height: 50px; }
         .btn-save { background: var(--primary); color: white; }
@@ -29,7 +27,6 @@
         .btn-copy { background: #17a2b8; color: white; }
         .btn-del { background: var(--danger); color: white; }
 
-        /* Editor UI */
         #editor-ui { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 1000; }
         .controls { background: var(--dark); color: white; padding: 0 15px; display: flex; justify-content: space-between; align-items: center; height: 60px; }
         #luckysheet { width: 100%; height: calc(100% - 60px); position: absolute; top: 60px; left: 0; }
@@ -60,12 +57,9 @@
     </div>
 
     <script>
-        const ken1 = 'github_pat_11AKK62IA0yVqdui4EXKgn_'; 
-        const ken2 = 'SLM4bzpcyr8qR8bl4l4FVSYXYTikK3lP90k5CXpvmK'; 
-        const ken3 = 'nPNU5ULHC5GJnJfGl'; 
-
+        // --- CONFIGURATION ---
         const CONFIG = {
-            ken: (ken1 + ken2 + ken3).trim(), 
+            token: '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', 
             owner: 'patrickwoolf',
             repo: 'spreadsheets',
             folder: 'my-sheets'
@@ -74,7 +68,7 @@
         let currentFileSha = '';
         let currentFileName = '';
 
-        // --- ENCODING UTILITIES (Handles Emojis/Special Chars) ---
+        // --- ENCODING UTILITIES ---
         function safeBtoa(str) {
             return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1)));
         }
@@ -89,9 +83,9 @@
         async function loadFileList() {
             try {
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}`, {
-                    headers: { 'Authorization': `token ${CONFIG.ken}`, 'Cache-Control': 'no-cache' }
+                    headers: { 'Authorization': `token ${CONFIG.token}`, 'Cache-Control': 'no-cache' }
                 });
-                if (!res.ok) throw new Error("Check your Folder/Repo name");
+                if (!res.ok) throw new Error("Could not load folder. Check repository settings.");
                 const files = await res.json();
                 const listDiv = document.getElementById('file-list');
                 listDiv.innerHTML = '';
@@ -117,7 +111,7 @@
                 currentFileName = name;
                 currentFileSha = sha;
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
-                    headers: { 'Authorization': `token ${CONFIG.ken}`, 'Cache-Control': 'no-cache' }
+                    headers: { 'Authorization': `token ${CONFIG.token}`, 'Cache-Control': 'no-cache' }
                 });
                 const fileData = await res.json();
                 const jsonStr = safeAtob(fileData.content);
@@ -127,8 +121,7 @@
                 document.getElementById('editor-ui').style.display = 'block';
                 document.getElementById('active-filename').innerText = name;
 
-                // CRITICAL: Clear any existing Luckysheet instances
-                if (typeof luckysheet !== "undefined" && luckysheet.destroy) {
+                if (window.luckysheet && luckysheet.destroy) {
                     luckysheet.destroy();
                 }
 
@@ -138,7 +131,7 @@
                     showinfobar: false,
                     lang: 'en'
                 });
-            } catch (err) { alert("Open failed: JSON structure might be invalid."); }
+            } catch (err) { alert("Open failed. The JSON might be malformed."); }
         }
 
         async function saveCurrentSheet() {
@@ -148,20 +141,20 @@
 
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${currentFileName}`, {
                     method: 'PUT',
-                    headers: { 'Authorization': `token ${CONFIG.ken}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `token ${CONFIG.token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ message: `Save ${currentFileName}`, content: base64Content, sha: currentFileSha })
                 });
 
                 if (res.ok) {
                     const result = await res.json();
-                    currentFileSha = result.content.sha; // Update SHA for next save
-                    alert("Saved to GitHub!");
-                } else { throw new Error("Conflict or Network Error"); }
+                    currentFileSha = result.content.sha;
+                    alert("Saved successfully!");
+                } else { throw new Error("Network Conflict (409). Try again."); }
             } catch (err) { alert("Save failed: " + err.message); }
         }
 
         async function createNewSheet() {
-            const name = prompt("Filename:");
+            const name = prompt("Enter sheet name:");
             if (!name) return;
             const fileName = name.endsWith('.json') ? name : name + '.json';
             const initial = [{"name": "Sheet1", "status": 1, "order": 0, "celldata": [], "config": {} }];
@@ -169,7 +162,7 @@
             
             await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${fileName}`, {
                 method: 'PUT',
-                headers: { 'Authorization': `token ${CONFIG.ken}` },
+                headers: { 'Authorization': `token ${CONFIG.token}` },
                 body: JSON.stringify({ message: `Create ${fileName}`, content: content })
             });
             loadFileList();
@@ -179,7 +172,7 @@
             if (!confirm(`Delete ${name}?`)) return;
             await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
                 method: 'DELETE',
-                headers: { 'Authorization': `token ${CONFIG.ken}` },
+                headers: { 'Authorization': `token ${CONFIG.token}` },
                 body: JSON.stringify({ message: "Delete", sha: sha })
             });
             loadFileList();
@@ -187,18 +180,17 @@
 
         async function copySheet(name) {
             const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
-                headers: { 'Authorization': `token ${CONFIG.ken}` }
+                headers: { 'Authorization': `token ${CONFIG.token}` }
             });
             const file = await res.json();
             await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name.replace('.json', '_copy.json')}`, {
                 method: 'PUT',
-                headers: { 'Authorization': `token ${CONFIG.ken}` },
+                headers: { 'Authorization': `token ${CONFIG.token}` },
                 body: JSON.stringify({ message: "Copy", content: file.content })
             });
             loadFileList();
         }
 
-        // --- SHORTCUTS ---
         window.addEventListener('keydown', e => {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
