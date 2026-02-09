@@ -94,26 +94,43 @@
             try {
                 currentFileName = name;
                 currentFileSha = sha;
-                document.getElementById('active-filename').innerText = `Editing: ${name}`;
+                document.getElementById('active-filename').innerText = `File: ${name}`;
                 
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
-                    headers: { 'Authorization': `token ${CONFIG.token}` }
+                    headers: { 'Authorization': `token ${CONFIG.ken}` }
                 });
                 const fileData = await res.json();
                 
-                // Decode Base64 content from GitHub
-                const content = JSON.parse(decodeURIComponent(escape(atob(fileData.content))));
-
+                // 1. Get the raw string content
+                let rawContent = "";
+                try {
+                    rawContent = decodeURIComponent(escape(atob(fileData.content)));
+                } catch (e) {
+                    console.warn("Encoding issue, trying raw decode...");
+                    rawContent = atob(fileData.content);
+                }
+        
+                // 2. Safety Check: If file is empty or just whitespace, use default template
+                let content;
+                if (!rawContent || rawContent.trim() === "") {
+                    console.log("File is empty, loading default template.");
+                    content = [{"name": "Sheet1", "status": 1, "order": 0, "celldata": [], "config": {} }];
+                } else {
+                    content = JSON.parse(rawContent);
+                }
+        
                 document.getElementById('drive-ui').style.display = 'none';
                 document.getElementById('editor-ui').style.display = 'block';
-
+        
                 luckysheet.create({
                     container: 'luckysheet',
                     showinfobar: false,
+                    lang: 'en',
                     data: content
                 });
             } catch (err) {
-                alert("Failed to open file: " + err.message);
+                console.error(err);
+                logError("Access Denied or Corrupt File: " + err.message);
             }
         }
 
