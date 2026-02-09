@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>GitHub Private Drive</title>
+    <title>GitHub Cloud Drive</title>
     <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/plugins/css/pluginsCss.css' />
     <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/plugins/plugins.css' />
     <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/css/luckysheet.css' />
@@ -11,29 +11,41 @@
     <script src="https://cdn.jsdelivr.net/npm/luckysheet@latest/dist/luckysheet.umd.js"></script>
 
     <style>
-        #drive-ui { padding: 20px; font-family: sans-serif; }
-        .file-item { cursor: pointer; color: blue; text-decoration: underline; margin: 10px 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f4f4f9; }
+        #drive-ui { max-width: 800px; margin: 50px auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .file-item { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid #eee; transition: background 0.2s; }
+        .file-item:hover { background: #f0f7ff; cursor: pointer; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-create { background: #28a745; color: white; margin-bottom: 20px; }
+        .btn-save { background: #007bff; color: white; }
+        .btn-back { background: #6c757d; color: white; }
         #editor-ui { display: none; }
-        .controls { position: absolute; top: 5px; right: 20px; z-index: 1000; }
+        .controls { background: #333; color: white; padding: 10px 20px; display: flex; justify-content: space-between; align-items: center; }
+        #debug-log { background: #ffebeb; color: #b71c1c; padding: 10px; margin-top: 20px; border-radius: 4px; font-size: 12px; display: none; border: 1px solid #f44336; }
     </style>
 </head>
 <body>
 
     <div id="drive-ui">
-        <h1>My Spreadsheet Drive</h1>
-        <button onclick="createNewSheet()">+ Create New Spreadsheet</button>
-        <div id="file-list">Loading files...</div>
+        <h1>📁 My GitHub Drive</h1>
+        <button class="btn-create" onclick="createNewSheet()">+ Create New Spreadsheet</button>
+        <div id="file-list">Loading files from GitHub...</div>
+        <div id="debug-log"></div>
     </div>
 
     <div id="editor-ui">
         <div class="controls">
-            <button onclick="saveCurrentSheet()" style="background: green; color: white;">SAVE TO GITHUB</button>
-            <button onclick="location.reload()">BACK TO DRIVE</button>
+            <span id="active-filename">Editing...</span>
+            <div>
+                <button class="btn-save" onclick="saveCurrentSheet()">💾 SAVE TO GITHUB</button>
+                <button class="btn-back" onclick="location.reload()">✖ EXIT</button>
+            </div>
         </div>
-        <div id="luckysheet" style="margin:0px;padding:0px;position:absolute;width:100%;height:95%;left:0px;top:40px;"></div>
+        <div id="luckysheet" style="margin:0px;padding:0px;position:absolute;width:100%;height:calc(100% - 60px);left:0px;top:60px;"></div>
     </div>
 
     <script>
+        // --- CONFIGURATION ---
         const CONFIG = {
             token: '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', 
             owner: 'patrickwoolf',
@@ -44,107 +56,129 @@
         let currentFileSha = '';
         let currentFileName = '';
 
-        // --- 1. LIST FILES ---
+        function logError(msg) {
+            const log = document.getElementById('debug-log');
+            log.style.display = 'block';
+            log.innerHTML = `<strong>Error:</strong> ${msg}`;
+        }
+
+        // --- 1. FETCH ALL FILES ---
         async function loadFileList() {
             try {
                 const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}`, {
                     headers: { 'Authorization': `token ${CONFIG.token}` }
                 });
                 
-                if (!res.ok) {
-                    const errorData = await res.json();
-                    console.error("GitHub API Error:", errorData.message);
-                    alert("GitHub says: " + errorData.message); // This will pop up the actual error
-                    return;
-                }
-        
+                if (!res.ok) throw new Error(await res.text());
+
                 const files = await res.json();
-                console.log("Files found:", files);
-                // ... rest of your code
+                const listDiv = document.getElementById('file-list');
+                listDiv.innerHTML = '';
+                
+                files.forEach(file => {
+                    if(file.name.endsWith('.json')) {
+                        const div = document.createElement('div');
+                        div.className = 'file-item';
+                        div.innerHTML = `<span>📊 ${file.name.replace('.json', '')}</span> <small>Edit &gt;</small>`;
+                        div.onclick = () => openSheet(file.name, file.sha);
+                        listDiv.appendChild(div);
+                    }
+                });
             } catch (err) {
-                console.error("Network or Script Error:", err);
+                logError("Could not list files. Check folder name and Token permissions. " + err.message);
             }
         }
-        // --- 2. OPEN SHEET ---
+
+        // --- 2. OPEN A SHEET ---
         async function openSheet(name, sha) {
-            currentFileName = name;
-            currentFileSha = sha;
-            
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
-                headers: { 'Authorization': `token ${CONFIG.token}` }
-            });
-            const fileData = await res.json();
-            const content = JSON.parse(atob(fileData.content)); // Decode Base64
+            try {
+                currentFileName = name;
+                currentFileSha = sha;
+                document.getElementById('active-filename').innerText = `Editing: ${name}`;
+                
+                const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${name}`, {
+                    headers: { 'Authorization': `token ${CONFIG.token}` }
+                });
+                const fileData = await res.json();
+                
+                // Decode Base64 content from GitHub
+                const content = JSON.parse(decodeURIComponent(escape(atob(fileData.content))));
 
-            document.getElementById('drive-ui').style.display = 'none';
-            document.getElementById('editor-ui').style.display = 'block';
+                document.getElementById('drive-ui').style.display = 'none';
+                document.getElementById('editor-ui').style.display = 'block';
 
-            luckysheet.create({
-                container: 'luckysheet',
-                data: content.length > 0 ? content : [{ "name": "Sheet1", "status": 1, "order": 0, "celldata": [] }]
-            });
-        }
-
-        // --- 3. SAVE SHEET ---
-        async function saveCurrentSheet() {
-            const data = luckysheet.getAllSheets();
-            const content = btoa(unescape(encodeURIComponent(JSON.stringify(data)))); // Secure Base64
-
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${currentFileName}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `token ${CONFIG.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `Update ${currentFileName}`,
-                    content: content,
-                    sha: currentFileSha
-                })
-            });
-
-            if(res.ok) {
-                const updatedFile = await res.json();
-                currentFileSha = updatedFile.content.sha; // Update SHA for next save
-                alert('Saved to GitHub across all devices!');
-            } else {
-                alert('Error saving. Check console.');
+                luckysheet.create({
+                    container: 'luckysheet',
+                    showinfobar: false,
+                    data: content
+                });
+            } catch (err) {
+                alert("Failed to open file: " + err.message);
             }
         }
 
-        // --- 4. CREATE NEW ---
+        // --- 3. CREATE NEW SHEET ---
         async function createNewSheet() {
-            const name = prompt("Enter sheet name (e.g., Budget):");
+            const name = prompt("Enter new spreadsheet name:");
             if (!name) return;
-            
             const fileName = name.endsWith('.json') ? name : name + '.json';
-            
-            // 1. Initial empty Luckysheet data
-            const initialData = [{"name": "Sheet1", "color": "", "status": 1, "order": 0, "data": [], "config": {}, "index": 0}];
-            const content = btoa(JSON.stringify(initialData));
-        
-            // 2. Push to GitHub to actually "create" the file
-            const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${fileName}`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `token ${CONFIG.token}`,
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    message: `Created new spreadsheet: ${fileName}`,
-                    content: content
-                })
-            });
-        
-            if (res.ok) {
-                alert("File created! Refreshing list...");
-                loadFileList(); // Refresh the list so you can see it
-            } else {
-                const err = await res.json();
-                alert("Error creating file: " + err.message);
+
+            // Default Luckysheet Template
+            const initialData = [{"name": "Sheet1", "status": 1, "order": 0, "celldata": [], "config": {} }];
+            const content = btoa(unescape(encodeURIComponent(JSON.stringify(initialData))));
+
+            try {
+                const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${fileName}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${CONFIG.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: `Create ${fileName}`,
+                        content: content
+                    })
+                });
+
+                if (!res.ok) throw new Error(await res.text());
+                
+                alert("Spreadsheet created!");
+                loadFileList();
+            } catch (err) {
+                logError("Create Failed: " + err.message);
             }
         }
 
+        // --- 4. SAVE DATA ---
+        async function saveCurrentSheet() {
+            try {
+                const data = luckysheet.getAllSheets();
+                const content = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+
+                const res = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/contents/${CONFIG.folder}/${currentFileName}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${CONFIG.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: `Update ${currentFileName}`,
+                        content: content,
+                        sha: currentFileSha
+                    })
+                });
+
+                if (!res.ok) throw new Error(await res.text());
+                
+                const updatedFile = await res.json();
+                currentFileSha = updatedFile.content.sha; // Important: Update SHA for next save
+                alert("Changes saved to GitHub!");
+            } catch (err) {
+                alert("Save Failed: " + err.message);
+            }
+        }
+
+        // Initialize
         loadFileList();
     </script>
 </body>
